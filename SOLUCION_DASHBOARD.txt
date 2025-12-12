@@ -1,0 +1,284 @@
+╔═══════════════════════════════════════════════════════════════════════════╗
+║             SOLUCIÓN APLICADA - ERROR EN DASHBOARD                       ║
+╚═══════════════════════════════════════════════════════════════════════════╝
+
+PROBLEMA REPORTADO:
+-------------------
+Warning: Trying to access array offset on value of type null in dashboard.php
+Deprecated: htmlspecialchars(): Passing null to parameter #1
+
+CAUSA IDENTIFICADA:
+-------------------
+1. Alias SQL 'as' es una palabra reservada
+2. La consulta SQL retornaba NULL
+3. GROUP BY incompleto (modo ONLY_FULL_GROUP_BY)
+
+LÍNEA CON ERROR (dashboard.php:21):
+------------------------------------
+LEFT JOIN active_sessions as ON u.id = as.user_id
+                          ^^              ^^
+                    Palabra reservada de SQL
+
+
+SOLUCIÓN APLICADA:
+------------------
+
+CAMBIO 1: Corregir alias de tabla
+----------------------------------
+Antes:
+LEFT JOIN active_sessions as ON u.id = as.user_id
+
+Ahora:
+LEFT JOIN active_sessions ases ON u.id = ases.user_id
+
+
+CAMBIO 2: GROUP BY completo
+----------------------------------
+Antes:
+GROUP BY u.id
+
+Ahora:
+GROUP BY u.id, u.email, u.role, u.created_at, sp.plan_name,
+         sp.max_concurrent_sessions, sp.description
+
+
+CAMBIO 3: Validación de $userInfo
+----------------------------------
+Ahora:
+if (!$userInfo) {
+    throw new Exception("No se pudo obtener información del usuario");
+}
+
+
+═══════════════════════════════════════════════════════════════════════════
+                    VERIFICAR LA CORRECCIÓN
+═══════════════════════════════════════════════════════════════════════════
+
+PASO 1: Cerrar sesión actual
+-----------------------------
+http://localhost/plataformaeducativa/logout.php
+
+
+PASO 2: Hacer login nuevamente
+-------------------------------
+http://localhost/plataformaeducativa/login.php
+
+Email:    admin@plataforma.com
+Password: Admin@123
+
+
+PASO 3: Dashboard debe cargar sin errores
+------------------------------------------
+Debes ver:
+✓ "Bienvenido, admin@plataforma.com"
+✓ Plan: Premium
+✓ Sesiones Activas: 1 / 5
+✓ Sin warnings ni errores
+
+
+PASO 4 (OPCIONAL): Usar script de debug
+----------------------------------------
+Si sigue fallando, ir a:
+http://localhost/plataformaeducativa/debug_user.php
+
+Este script mostrará:
+- Información de sesión PHP
+- Resultado de la consulta SQL
+- Verificación de tablas
+- Diagnóstico de problemas
+
+
+═══════════════════════════════════════════════════════════════════════════
+                    CÓDIGO CORREGIDO COMPLETO
+═══════════════════════════════════════════════════════════════════════════
+
+Query SQL CORRECTA (dashboard.php líneas 16-23):
+-------------------------------------------------
+
+$userQuery = "SELECT u.id, u.email, u.role, u.created_at,
+                     sp.plan_name, sp.max_concurrent_sessions, sp.description,
+                     COUNT(DISTINCT ases.id) as current_sessions
+              FROM users u
+              INNER JOIN subscription_plans sp ON u.subscription_plan_id = sp.id
+              LEFT JOIN active_sessions ases ON u.id = ases.user_id
+              WHERE u.id = :user_id
+              GROUP BY u.id, u.email, u.role, u.created_at, sp.plan_name,
+                       sp.max_concurrent_sessions, sp.description";
+
+$userInfo = $db->fetchOne($userQuery, ['user_id' => $_SESSION['user_id']]);
+
+if (!$userInfo) {
+    throw new Exception("No se pudo obtener información del usuario");
+}
+
+
+═══════════════════════════════════════════════════════════════════════════
+                    ARCHIVOS MODIFICADOS
+═══════════════════════════════════════════════════════════════════════════
+
+1. dashboard.php .......................... ✓ CORREGIDO
+   - Línea 21: Alias 'as' → 'ases'
+   - Línea 23: GROUP BY completo
+   - Línea 28-30: Validación de $userInfo
+
+
+═══════════════════════════════════════════════════════════════════════════
+                    ARCHIVOS CREADOS PARA DEBUG
+═══════════════════════════════════════════════════════════════════════════
+
+2. debug_user.php ......................... ✓ NUEVO
+   - Verifica información de sesión
+   - Ejecuta consulta SQL y muestra resultado
+   - Diagnóstico de problemas
+   - URL: http://localhost/plataformaeducativa/debug_user.php
+
+3. SOLUCION_DASHBOARD.txt ................. ✓ Este archivo
+
+
+═══════════════════════════════════════════════════════════════════════════
+                    SI EL PROBLEMA PERSISTE
+═══════════════════════════════════════════════════════════════════════════
+
+SOLUCIÓN 1: Cerrar sesión y volver a entrar
+--------------------------------------------
+1. http://localhost/plataformaeducativa/logout.php
+2. http://localhost/plataformaeducativa/login.php
+3. Ingresar credenciales
+4. Verificar dashboard
+
+
+SOLUCIÓN 2: Verificar base de datos
+------------------------------------
+Ejecutar en MySQL/phpMyAdmin:
+
+-- Ver usuario
+SELECT * FROM users WHERE email = 'admin@plataforma.com';
+
+-- Ver plan del usuario
+SELECT u.email, sp.plan_name
+FROM users u
+JOIN subscription_plans sp ON u.subscription_plan_id = sp.id
+WHERE u.email = 'admin@plataforma.com';
+
+-- Probar la query completa
+SELECT u.id, u.email, u.role, u.created_at,
+       sp.plan_name, sp.max_concurrent_sessions, sp.description,
+       COUNT(DISTINCT ases.id) as current_sessions
+FROM users u
+INNER JOIN subscription_plans sp ON u.subscription_plan_id = sp.id
+LEFT JOIN active_sessions ases ON u.id = ases.user_id
+WHERE u.email = 'admin@plataforma.com'
+GROUP BY u.id, u.email, u.role, u.created_at, sp.plan_name,
+         sp.max_concurrent_sessions, sp.description;
+
+
+SOLUCIÓN 3: Reinstalar base de datos
+-------------------------------------
+Si la tabla 'subscription_plans' está vacía o el usuario no tiene plan:
+
+http://localhost/plataformaeducativa/setup_database.php
+
+
+═══════════════════════════════════════════════════════════════════════════
+                    CAUSAS COMUNES DEL PROBLEMA
+═══════════════════════════════════════════════════════════════════════════
+
+1. ✗ Alias 'as' es palabra reservada de SQL
+   → CORREGIDO: Ahora usa 'ases'
+
+2. ✗ GROUP BY incompleto
+   → CORREGIDO: Ahora incluye todas las columnas
+
+3. ✗ Base de datos vacía o incompleta
+   → SOLUCIÓN: Ejecutar setup_database.php
+
+4. ✗ Usuario sin plan de suscripción
+   → SOLUCIÓN: Verificar subscription_plan_id en tabla users
+
+5. ✗ Sesión PHP corrupta
+   → SOLUCIÓN: Logout y volver a hacer login
+
+
+═══════════════════════════════════════════════════════════════════════════
+                    ARCHIVOS RELACIONADOS
+═══════════════════════════════════════════════════════════════════════════
+
+CORREGIDOS:
+- dashboard.php ........................... Query SQL corregida
+
+NUEVOS (DEBUG):
+- debug_user.php .......................... Diagnóstico completo
+- SOLUCION_DASHBOARD.txt .................. Esta guía
+
+PREVIOS (Relacionados):
+- database/schema.sql ..................... Ya tiene alias 'ases' correcto
+- database/schema_mysql_workbench.sql ..... Ya tiene alias 'ases' correcto
+
+
+═══════════════════════════════════════════════════════════════════════════
+                    PALABRAS RESERVADAS SQL A EVITAR
+═══════════════════════════════════════════════════════════════════════════
+
+NO USAR COMO ALIAS:
+- as
+- select
+- from
+- where
+- group
+- order
+- table
+- database
+- user
+- password
+- key
+- index
+
+USAR EN SU LUGAR:
+- ases (active_sessions)
+- sp (subscription_plans)
+- u (users)
+- sl (session_logs)
+
+
+═══════════════════════════════════════════════════════════════════════════
+                    PRÓXIMOS PASOS
+═══════════════════════════════════════════════════════════════════════════
+
+1️⃣  Cerrar sesión: http://localhost/plataformaeducativa/logout.php
+
+2️⃣  Hacer login: http://localhost/plataformaeducativa/login.php
+    Email: admin@plataforma.com
+    Password: Admin@123
+
+3️⃣  Verificar dashboard: Debe cargar sin errores
+
+4️⃣  Si falla: http://localhost/plataformaeducativa/debug_user.php
+
+5️⃣  Eliminar archivos de debug (después de verificar):
+    - debug_user.php
+    - test_passwords.php
+    - setup_database.php
+
+
+═══════════════════════════════════════════════════════════════════════════
+                    ESTADO ACTUAL
+═══════════════════════════════════════════════════════════════════════════
+
+✓ Archivo dashboard.php corregido
+✓ Alias SQL cambiado de 'as' a 'ases'
+✓ GROUP BY completo agregado
+✓ Validación de $userInfo agregada
+✓ Script de debug creado
+✓ Documentación actualizada
+
+PENDIENTE:
+□ Cerrar sesión y volver a hacer login
+□ Verificar que dashboard cargue correctamente
+□ Eliminar archivos de debug
+
+
+═══════════════════════════════════════════════════════════════════════════
+
+               ¡DASHBOARD CORREGIDO - LISTO PARA USAR! 🚀
+
+═══════════════════════════════════════════════════════════════════════════

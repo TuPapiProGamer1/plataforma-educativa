@@ -1,0 +1,43 @@
+# ============================================
+# PLATAFORMA EDUCATIVA - GITIGNORE
+# ============================================
+
+# Dependencias de Composer
+/vendor/
+composer.lock
+
+# Logs
+/logs/*.log
+!/logs/.gitkeep
+
+# Archivos de configuración con datos sensibles
+# (Descomentar si deseas ignorar config.php)
+# /config/config.php
+
+# Archivos de sistema
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDEs
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# Archivos temporales de PHP
+*.cache
+*.tmp
+
+# Archivos de sesión
+/tmp/
+/sessions/
+
+# Variables de entorno
+.env
+.env.local
+
+# Archivos de backup
+*.bak
+*.backup
+*~
